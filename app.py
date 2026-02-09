@@ -530,8 +530,8 @@ def show_results():
         timeout_param = request.form.get('timeout')
         file = request.files.get('file')
         github_repo = request.form.get('github_repo')
-        ai_param = request.form.get('ai', 'false').lower() == 'true'
-        extended_param = request.form.get('extended', 'false')
+        ai_param = request.form.get('ai', '0').lower() == '1'
+        extended_param = request.form.get('extended', '0')
         submission_name = request.form.get('submission_name')
     else:
         milestone = request.args.get('milestone')
@@ -539,7 +539,7 @@ def show_results():
         file = None
         github_repo = None
         ai_param = False
-        extended_param = request.args.get('extended', 'false')
+        extended_param = request.args.get('extended', '0')
         submission_name = None
 
     if not submission_name:
@@ -576,7 +576,7 @@ def show_results():
         return jsonify({"error": f"Milestone '{milestone}' is disabled in shared config."}), 400
 
     # If extended is 'true', verify extended is allowed
-    if extended_param == "true":
+    if extended_param == "1":
         if MILESTONE_CONFIG[milestone]["extended_enabled"]:
             # e.g. use "milestone1_extended"
             milestone = f"{milestone}_extended"
@@ -680,4 +680,4 @@ def show_results():
 
 
 if __name__ == "__main__":
-    app.run(port="7200", debug=True)
+    app.run(host="0.0.0.0", port=7200, debug=True)
