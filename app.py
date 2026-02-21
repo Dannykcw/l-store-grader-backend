@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from english_words import get_english_words_set
 from random import sample
 from datetime import datetime
 from io import BytesIO
@@ -9,15 +8,15 @@ import subprocess
 import json
 import zipfile
 import os
-import random
 from urllib.parse import quote_plus
 from pymongo import MongoClient
 from dotenv import load_dotenv
-import hashlib
 import asyncio
 import aiohttp
 import time
 import requests
+import sys
+import glob
 
 # 1) ADD gql imports
 from gql import gql, Client
@@ -102,7 +101,7 @@ def generate_unique_name():
 
     words_list = list(get_english_words_set(["web2"], lower=True, alpha=True))
     filtered_words_list = [w for w in words_list if len(w) <= 5]
-    chosen = random.sample(filtered_words_list, 3)
+    chosen = sample(filtered_words_list, 3)
     chosen = [word.capitalize() for word in chosen]
     return " ".join(chosen)
 
