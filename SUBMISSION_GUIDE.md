@@ -111,6 +111,7 @@ The zip should contain (at minimum) what is necessary to run the testers. This m
 - the `lstore/` folder
 - Wheels (if any)
 - dependency/project config file (e.g. pyproject.toml, cargo.toml, CMakelist.txt).
+- The .git folder. **
 
 You can also just zip up everything because the grader read only the necessary part.
 
