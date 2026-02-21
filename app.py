@@ -328,7 +328,96 @@ def merge_contributors(a, b):
     return [{"name": k, "commits": v} for k, v in merged_map.items()]
 
 
-def milestone_tests(extract_path, lstore_path, milestone_name, timeout_val=60):
+def setup_submission_env(extract_path, lstore_path) -> None | str:
+    """
+    Detects whether the submission contains pre-built wheel files or a requirements.txt,
+    and if so creates a per-submission virtualenv and installs the dependencies into it.
+
+    Returns:
+        str or None: Path to the venv Python executable if a venv was created,
+                     or None for pure-Python submissions.
+    """
+    venv_dir = os.path.join(extract_path, "venv")
+
+    # Detect any wheels in lstore_path
+    wheel_files = glob.glob(os.path.join(lstore_path, "**", "*.whl"), recursive=True)
+
+    # Detect requirements.txt directly inside lstore_path
+    requirements_file = os.path.join(lstore_path, "requirements.txt")
+    has_requirements = os.path.isfile(requirements_file)
+
+    if not wheel_files and not has_requirements:
+        print("Pure Python submission: using system python")
+        return sys.executable
+
+    # Create virtualenv
+    try:
+        print(f"Creating virtualenv at: {venv_dir}")
+        subprocess.run(
+            [sys.executable, "-m", "venv", venv_dir],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        print("Venv creation timed out; falling back to system python")
+        return sys.executable
+    except Exception as e:
+        print(f"Venv creation failed: {e}; falling back to system python")
+        return sys.executable
+
+    # Resolve platform-specific python path inside venv
+    if os.name == "nt":
+        venv_python = os.path.join(venv_dir, "Scripts", "python")
+    else:
+        venv_python = os.path.join(venv_dir, "bin", "python")
+
+    if wheel_files:
+        print(f"Detected wheels: installing into venv ({len(wheel_files)} file(s))")
+        for whl in wheel_files:
+            try:
+                subprocess.run(
+                    [venv_python, "-m", "pip", "install", whl, "--quiet"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+            except subprocess.TimeoutExpired:
+                print(f"pip install timed out for {whl} (continuing)")
+            except Exception as e:
+                print(f"pip install failed for {whl}: {e} (continuing)")
+
+    if has_requirements:
+        print("Detected requirements.txt: installing into venv")
+        try:
+            subprocess.run(
+                [
+                    venv_python,
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    requirements_file,
+                    "--quiet",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            print("pip install -r requirements.txt timed out (continuing)")
+        except Exception as e:
+            print(f"pip install -r requirements.txt failed: {e} (continuing)")
+
+    return venv_python
+
+
+def milestone_tests(
+    extract_path, lstore_path, milestone_name, timeout_val=60, python_executable=None
+):
     """
     Runs the single official milestone test script with the given 'timeout_val' (in seconds).
     """
@@ -364,9 +453,11 @@ def milestone_tests(extract_path, lstore_path, milestone_name, timeout_val=60):
     env = os.environ.copy()
     env["PYTHONPATH"] = lstore_path + os.pathsep + env.get("PYTHONPATH", "")
 
+    python_cmd = python_executable
+
     try:
         result = subprocess.run(
-            ["python", tester_script_path],
+            [python_cmd, tester_script_path],
             capture_output=True,
             text=True,
             env=env,
@@ -428,6 +519,7 @@ mutation postTxn($asset: JSONScalar!) {{
   }}
 }}
 """)
+
 
 async def _store_on_resilientdb_async(result_json):
     transport = AIOHTTPTransport(url=f"{resdb_url}/graphql")
@@ -646,11 +738,13 @@ def show_results():
         return jsonify({"error": "No valid file or GitHub repository provided."}), 400
 
     # 2) Run milestone tests
+    python_executable = setup_submission_env(extract_path, lstore_path)
     results, m_tests, m_count, total = milestone_tests(
         extract_path,
         lstore_path,
         milestone,
         timeout_val,
+        python_executable=python_executable,
     )
 
     # 3) Optionally run AI checks
