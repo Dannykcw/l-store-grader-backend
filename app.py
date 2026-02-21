@@ -25,6 +25,7 @@ from gql.transport.aiohttp import AIOHTTPTransport
 
 # 2) IMPORT nest_asyncio AND APPLY
 import nest_asyncio
+
 nest_asyncio.apply()
 
 # ------------------ Shared Config Loader ------------------
@@ -35,6 +36,7 @@ as the old MILESTONE_CONFIG.
 """
 
 MILESTONE_CONFIG = {}
+
 
 def load_milestones_config():
     """
@@ -51,29 +53,30 @@ def load_milestones_config():
         for m in data["milestones"]:
             tmp_config[m["id"]] = {
                 "enabled": bool(m["enabled"]),
-                "extended_enabled": bool(m["extendedEnabled"])
+                "extended_enabled": bool(m["extendedEnabled"]),
             }
         return tmp_config
     except Exception as e:
         print("Error loading milestones config:", e)
         return {}
 
+
 # Attempt to load the config once at startup
 MILESTONE_CONFIG = load_milestones_config()
 
 # ----------------- Load environment variables -----------------
 load_dotenv()
-username = os.getenv('DB_USERNAME')
-password = os.getenv('DB_PASSWORD')
-host = os.getenv('DB_HOST')
-port = os.getenv('DB_PORT')
-db_name = os.getenv('DB_NAME')
-deepseek_url = os.getenv('DEEPSEEK_URL')
-deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
-resdb_url = os.getenv('RESILIENTDB_URL')
-resdb_private_key = os.getenv('RESILIENTDB_PRIVATE_KEY')
-resdb_public_key = os.getenv('RESILIENTDB_PUBLIC_KEY')
-resdb_recipient_key = os.getenv('RESILIENTDB_RECIPIENT_KEY')
+username = os.getenv("DB_USERNAME")
+password = os.getenv("DB_PASSWORD")
+host = os.getenv("DB_HOST")
+port = os.getenv("DB_PORT")
+db_name = os.getenv("DB_NAME")
+deepseek_url = os.getenv("DEEPSEEK_URL")
+deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
+resdb_url = os.getenv("RESILIENTDB_URL")
+resdb_private_key = os.getenv("RESILIENTDB_PRIVATE_KEY")
+resdb_public_key = os.getenv("RESILIENTDB_PUBLIC_KEY")
+resdb_recipient_key = os.getenv("RESILIENTDB_RECIPIENT_KEY")
 
 encoded_username = quote_plus(username)
 encoded_password = quote_plus(password)
@@ -86,7 +89,7 @@ db = client[db_name]
 app = Flask(__name__)
 CORS(app)
 
-BASE_DIR = os.path.expanduser('~/l-store-grader')
+BASE_DIR = os.path.expanduser("~/l-store-grader")
 SUBMISSIONS_DIR = os.path.join(BASE_DIR, "submissions")
 os.makedirs(SUBMISSIONS_DIR, exist_ok=True)
 
@@ -96,7 +99,8 @@ def generate_unique_name():
     Generates a random 3-word name: e.g. "Quiet Heart Lane"
     """
     from english_words import get_english_words_set
-    words_list = list(get_english_words_set(['web2'], lower=True, alpha=True))
+
+    words_list = list(get_english_words_set(["web2"], lower=True, alpha=True))
     filtered_words_list = [w for w in words_list if len(w) <= 5]
     chosen = random.sample(filtered_words_list, 3)
     chosen = [word.capitalize() for word in chosen]
@@ -110,7 +114,7 @@ async def read_python_files(folder_path):
     async def read_file(file_path, filename):
         try:
             content = await asyncio.to_thread(
-                lambda: open(file_path, 'r', encoding='utf-8', errors='replace').read()
+                lambda: open(file_path, "r", encoding="utf-8", errors="replace").read()
             )
             return filename, content
         except Exception as e:
@@ -120,7 +124,7 @@ async def read_python_files(folder_path):
     tasks = []
     for root, _, files in os.walk(folder_path):
         for file in files:
-            if file.endswith('.py'):
+            if file.endswith(".py"):
                 file_path = os.path.join(root, file)
                 tasks.append(read_file(file_path, file))
 
@@ -131,24 +135,21 @@ async def read_python_files(folder_path):
     return code_data
 
 
-async def call_deepseek_api(prompt, model="deepseek-reasoner",
-                            api_key=f"{deepseek_api_key}",
-                            total_timeout=300):
+async def call_deepseek_api(
+    prompt, model="deepseek-reasoner", api_key=f"{deepseek_api_key}", total_timeout=300
+):
     """
     Calls the DeepSeek API with a configurable timeout (default=300 seconds).
     """
     url = f"{deepseek_url}/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     payload = {
         "model": model,
         "messages": [
             {"role": "system", "content": "You are a code analysis assistant."},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ],
-        "stream": False
+        "stream": False,
     }
     timeout = aiohttp.ClientTimeout(total=total_timeout)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -255,31 +256,40 @@ async def run_ai_tests(lstore_folder, ai_timeout=300):
     overall_end = time.time()
     return {
         "ai_generated_confidence": parsed_ai.get("ai_generated_confidence"),
-        "pickle_serialization_confidence": parsed_pickle.get("pickle_serialization_confidence"),
-        "struct_serialization_confidence": parsed_struct.get("struct_serialization_confidence"),
-        "json_serialization_confidence": parsed_json.get("json_serialization_confidence"),
+        "pickle_serialization_confidence": parsed_pickle.get(
+            "pickle_serialization_confidence"
+        ),
+        "struct_serialization_confidence": parsed_struct.get(
+            "struct_serialization_confidence"
+        ),
+        "json_serialization_confidence": parsed_json.get(
+            "json_serialization_confidence"
+        ),
         "individual_request_times": {
             "ai_generated": responses[0].get("request_time"),
             "pickle": responses[1].get("request_time"),
             "struct": responses[2].get("request_time"),
             "json": responses[3].get("request_time"),
         },
-        "total_time": round(overall_end - overall_start, 2)
+        "total_time": round(overall_end - overall_start, 2),
     }
 
 
 def extract_commit_stats(folder_path):
-    stats = {
-        "local_git_commits": [],
-        "contributors": []
-    }
+    stats = {"local_git_commits": [], "contributors": []}
 
     git_path = os.path.join(folder_path, ".git")
     if os.path.exists(git_path):
         try:
             output = subprocess.check_output(
-                ["git", "--no-pager", "log", "--pretty=format:%h - %an, %ad", "--date=short"],
-                cwd=folder_path
+                [
+                    "git",
+                    "--no-pager",
+                    "log",
+                    "--pretty=format:%h - %an, %ad",
+                    "--date=short",
+                ],
+                cwd=folder_path,
             )
             lines = output.decode("utf-8").splitlines()
             stats["local_git_commits"] = lines
@@ -287,11 +297,11 @@ def extract_commit_stats(folder_path):
             # Count commits per author
             author_counts = {}
             for line in lines:
-                parts = line.split('-', 1)
+                parts = line.split("-", 1)
                 if len(parts) < 2:
                     continue
-                after_dash = parts[1].strip()   # e.g. "Apratim Shukla, 2025-03-11"
-                comma_idx = after_dash.rfind(',')
+                after_dash = parts[1].strip()  # e.g. "Apratim Shukla, 2025-03-11"
+                comma_idx = after_dash.rfind(",")
                 if comma_idx != -1:
                     author_name = after_dash[:comma_idx].strip()
                 else:
@@ -310,7 +320,7 @@ def extract_commit_stats(folder_path):
 
 
 def merge_contributors(a, b):
-    """ Merge two arrays of {name, commits}, summing commits for duplicates. """
+    """Merge two arrays of {name, commits}, summing commits for duplicates."""
     merged_map = {}
     for obj in a:
         merged_map[obj["name"]] = merged_map.get(obj["name"], 0) + obj["commits"]
@@ -323,7 +333,7 @@ def milestone_tests(extract_path, lstore_path, milestone_name, timeout_val=60):
     """
     Runs the single official milestone test script with the given 'timeout_val' (in seconds).
     """
-    milestones_collection = db['new_milestones']
+    milestones_collection = db["new_milestones"]
     milestone_script = milestones_collection.find_one({"milestone": milestone_name})
 
     default_metrics = {
@@ -331,7 +341,7 @@ def milestone_tests(extract_path, lstore_path, milestone_name, timeout_val=60):
         "update_time": 0,
         "select_time": 0,
         "agg_time": 0,
-        "delete_time": 0
+        "delete_time": 0,
     }
 
     def default_failure(message):
@@ -342,18 +352,18 @@ def milestone_tests(extract_path, lstore_path, milestone_name, timeout_val=60):
         print("Milestone script not found for milestone:", milestone_name)
         return default_failure("Milestone script not found.")
 
-    script_code = milestone_script['code']
-    tester_script_path = os.path.join(extract_path, 'tester.py')
+    script_code = milestone_script["code"]
+    tester_script_path = os.path.join(extract_path, "tester.py")
 
     try:
-        with open(tester_script_path, 'w') as f:
+        with open(tester_script_path, "w") as f:
             f.write(script_code)
     except Exception as e:
         print("Error writing tester.py:", e)
         return default_failure("Could not write tester.py file.")
 
     env = os.environ.copy()
-    env['PYTHONPATH'] = lstore_path + os.pathsep + env.get('PYTHONPATH', '')
+    env["PYTHONPATH"] = lstore_path + os.pathsep + env.get("PYTHONPATH", "")
 
     try:
         result = subprocess.run(
@@ -362,7 +372,7 @@ def milestone_tests(extract_path, lstore_path, milestone_name, timeout_val=60):
             text=True,
             env=env,
             cwd=extract_path,
-            timeout=timeout_val
+            timeout=timeout_val,
         )
     except subprocess.TimeoutExpired:
         print("Tester script timed out.")
@@ -373,7 +383,9 @@ def milestone_tests(extract_path, lstore_path, milestone_name, timeout_val=60):
 
     if result.returncode != 0:
         print("Tester script stderr:", result.stderr)
-        error_message = result.stderr.strip() or "Test execution failed with non-zero return code."
+        error_message = (
+            result.stderr.strip() or "Test execution failed with non-zero return code."
+        )
         return default_failure(error_message)
 
     try:
@@ -385,7 +397,9 @@ def milestone_tests(extract_path, lstore_path, milestone_name, timeout_val=60):
     tests_out = output.get("tests", {})
     if "count" not in output or "total" not in output:
         total = len(tests_out)
-        count = sum(1 for outcome in tests_out.values() if not outcome.startswith("Error"))
+        count = sum(
+            1 for outcome in tests_out.values() if not outcome.startswith("Error")
+        )
     else:
         count = output["count"]
         total = output["total"]
@@ -447,7 +461,7 @@ def store_on_resilientdb(result_json):
         return None
 
 
-@app.route('/results/<transaction_id>', methods=['GET'])
+@app.route("/results/<transaction_id>", methods=["GET"])
 def get_results_transaction(transaction_id):
     query_str = f'''
     query {{
@@ -462,17 +476,18 @@ def get_results_transaction(transaction_id):
         if response.status_code == 200:
             data = response.json()
             asset_data = data.get("data", {}).get("getTransaction", {}).get("asset", {})
-            return jsonify({
-                "resilientdb_tx_id": transaction_id,
-                "resilientdb_result": asset_data
-            })
+            return jsonify(
+                {"resilientdb_tx_id": transaction_id, "resilientdb_result": asset_data}
+            )
         else:
-            return jsonify({"error": "Error fetching transaction data from resilientdb."}), 400
+            return jsonify(
+                {"error": "Error fetching transaction data from resilientdb."}
+            ), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/leaderboard', methods=['GET'])
+@app.route("/leaderboard", methods=["GET"])
 def leaderboard():
     """
     Displays each milestone-specific submission, sorted by:
@@ -507,7 +522,7 @@ def leaderboard():
             "count": passed,
             "total": total_tests,
             "total_time": round(perf_sum, 3),
-            "tx_id": tx_id
+            "tx_id": tx_id,
         }
         leaderboard_data.append(entry)
 
@@ -517,7 +532,7 @@ def leaderboard():
     return jsonify(leaderboard_data)
 
 
-@app.route('/results', methods=['GET', 'POST'])
+@app.route("/results", methods=["GET", "POST"])
 def show_results():
     """
     Main route to run tests and store the results.
@@ -525,21 +540,21 @@ def show_results():
     # Start timing now (for total sub_process time).
     overall_start = time.time()
 
-    if request.method == 'POST':
-        milestone = request.form.get('milestone')
-        timeout_param = request.form.get('timeout')
-        file = request.files.get('file')
-        github_repo = request.form.get('github_repo')
-        ai_param = request.form.get('ai', '0').lower() == '1'
-        extended_param = request.form.get('extended', '0')
-        submission_name = request.form.get('submission_name')
+    if request.method == "POST":
+        milestone = request.form.get("milestone")
+        timeout_param = request.form.get("timeout")
+        file = request.files.get("file")
+        github_repo = request.form.get("github_repo")
+        ai_param = request.form.get("ai", "0").lower() == "1"
+        extended_param = request.form.get("extended", "0")
+        submission_name = request.form.get("submission_name")
     else:
-        milestone = request.args.get('milestone')
-        timeout_param = request.args.get('timeout')
+        milestone = request.args.get("milestone")
+        timeout_param = request.args.get("timeout")
         file = None
         github_repo = None
         ai_param = False
-        extended_param = request.args.get('extended', '0')
+        extended_param = request.args.get("extended", "0")
         submission_name = None
 
     if not submission_name:
@@ -569,11 +584,15 @@ def show_results():
     # ====================== USE MILESTONE_CONFIG ======================
     # Ensure the milestone is recognized
     if milestone not in MILESTONE_CONFIG:
-        return jsonify({"error": f"Milestone '{milestone}' is not recognized in shared config."}), 400
+        return jsonify(
+            {"error": f"Milestone '{milestone}' is not recognized in shared config."}
+        ), 400
 
     # Check if this milestone is enabled
     if not MILESTONE_CONFIG[milestone]["enabled"]:
-        return jsonify({"error": f"Milestone '{milestone}' is disabled in shared config."}), 400
+        return jsonify(
+            {"error": f"Milestone '{milestone}' is disabled in shared config."}
+        ), 400
 
     # If extended is 'true', verify extended is allowed
     if extended_param == "1":
@@ -581,7 +600,9 @@ def show_results():
             # e.g. use "milestone1_extended"
             milestone = f"{milestone}_extended"
         else:
-            return jsonify({"error": f"Extended version of '{milestone}' is not enabled."}), 400
+            return jsonify(
+                {"error": f"Extended version of '{milestone}' is not enabled."}
+            ), 400
     # =================================================================
 
     unique_id = uuid.uuid4().hex
@@ -591,27 +612,27 @@ def show_results():
     os.makedirs(extract_path, exist_ok=True)
 
     # 1) Extract or clone user-submitted code
-    if file and file.filename.endswith('.zip'):
-        lstore_path = os.path.join(extract_path, 'lstore')
+    if file and file.filename.endswith(".zip"):
+        lstore_path = os.path.join(extract_path, "lstore")
         os.makedirs(lstore_path, exist_ok=True)
         with zipfile.ZipFile(BytesIO(file.read())) as zip_file:
             top_level_dirs = set()
             for name in zip_file.namelist():
-                parts = name.split('/')
+                parts = name.split("/")
                 if len(parts) > 0 and parts[0]:
                     top_level_dirs.add(parts[0])
             if len(top_level_dirs) == 1:
                 folder_name = list(top_level_dirs)[0]
                 for member in zip_file.namelist():
                     member_path = os.path.relpath(member, folder_name)
-                    if member_path == '.':
+                    if member_path == ".":
                         continue
                     target_path = os.path.join(lstore_path, member_path)
-                    if member.endswith('/'):
+                    if member.endswith("/"):
                         os.makedirs(target_path, exist_ok=True)
                     else:
                         os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                        with open(target_path, 'wb') as f:
+                        with open(target_path, "wb") as f:
                             f.write(zip_file.read(member))
             else:
                 zip_file.extractall(lstore_path)
@@ -630,7 +651,7 @@ def show_results():
         extract_path,
         lstore_path,
         milestone,
-        timeout_val
+        timeout_val,
     )
 
     # 3) Optionally run AI checks
@@ -645,8 +666,7 @@ def show_results():
         repo_stats = extract_commit_stats(lstore_path)
         commit_stats["github_repo_commits"] = repo_stats.get("local_git_commits", [])
         merged = merge_contributors(
-            commit_stats.get("contributors", []),
-            repo_stats.get("contributors", [])
+            commit_stats.get("contributors", []), repo_stats.get("contributors", [])
         )
         commit_stats["contributors"] = merged
 
@@ -664,7 +684,7 @@ def show_results():
         "performance_results": results,  # e.g. insert_time, update_time, etc.
         "ai_tests": ai_results,
         "commit_stats": commit_stats,
-        "subprocess_total_time": total_subprocess_time
+        "subprocess_total_time": total_subprocess_time,
     }
 
     # 6) Store on ResilientDB
