@@ -1,0 +1,6 @@
+[submodule "test-fixtures/RedoxQL"]
+	path = test-fixtures/RedoxQL
+	url = https://github.com/JakeRoggenbuck/RedoxQL
+[submodule "test-fixtures/cowabunga-db"]
+	path = test-fixtures/cowabunga-db
+	url = https://github.com/keyur-parikh/cowabunga-db
