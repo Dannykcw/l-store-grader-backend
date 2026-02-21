@@ -22,6 +22,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from packaging.utils import parse_wheel_filename
+from packaging.tags import sys_tags, Tag
 
 
 # --------------- setup_submission_env (copied from app.py) ---------------
@@ -29,20 +31,78 @@ import tempfile
 # (which has import-time side effects: MongoDB connection, env vars, etc.)
 
 
-def setup_submission_env(extract_path, lstore_path):
+def is_wheel_compatible(wheel_path: str):
+    # Validate wheel filename
+    filename = os.path.basename(wheel_path)
+    try:
+        _,_,_, wheel_tags = parse_wheel_filename(filename)
+    except ValueError:
+        return False, "Invalid filename format (not a valid wheel name)"
+    
+    # Get system supported tags
+    supported_tags: list[Tag] = list(sys_tags())
+    supported_set = set(supported_tags)
+    
+    if not wheel_tags.isdisjoint(supported_set):
+        return True, "compatible"
+    
+    # Case no match
+    curr_sys_tag = supported_tags[0]
+    curr_w_tag = list(wheel_tags)[0]
+    
+    mismatches = []
+    
+    if curr_w_tag.interpreter != curr_sys_tag.interpreter:
+        mismatches.append(f"Python Version Mismatch: Wheel expects {curr_w_tag.interpreter}, System is {curr_sys_tag.interpreter}")
+    
+    if curr_w_tag.abi != curr_sys_tag.abi:
+        mismatches.append(f"ABI Mismatch: Wheel expects {curr_w_tag.abi}, System is {curr_sys_tag.abi}")
+        
+    if curr_w_tag.platform != curr_sys_tag.platform:
+        mismatches.append(f"Platform Mismatch: Wheel expects {curr_w_tag.platform}, System is {curr_sys_tag.platform}")
+        
+    reason = " | ".joing(mismatches) if mismatches else "Unknown tag incompatibility"
+    
+    return False, reason
+
+
+def setup_submission_env(extract_path, lstore_path) -> tuple[str | None, str | None]:
+    """
+    Detects whether the submission contains pre-built wheel files or a requirements.txt,
+    and if so creates a per-submission virtualenv and installs the dependencies into it.
+
+    Returns:
+        tuple: (python_executable: str or None, error_message: str or None)
+    """
     venv_dir = os.path.join(extract_path, "venv")
 
-    wheel_files = glob.glob(os.path.join(lstore_path, "**", "*.whl"), recursive=True)
+    # Detect any wheels in lstore_path
+    all_found_wheels = glob.glob(os.path.join(lstore_path, "**", "*.whl"), recursive=True)
+    
+    incompatible_errors = []
+    valid_wheels = []
+    
+    for whl in all_found_wheels:
+        is_ok, reason = is_wheel_compatible(whl) # Assuming this is defined elsewhere
+        if is_ok:
+            valid_wheels.append(whl)
+        else:
+            incompatible_errors.append(f"{os.path.basename(whl)}: {reason}")
+    
+    # No point continuing if any wheels don't work cause the code probably depends on all of them
+    if incompatible_errors:
+        error_details = "\n".join(incompatible_errors)
+        return None, f"Compatibility Error:\n{error_details}"
 
+    # Detect requirements.txt directly inside lstore_path
     requirements_file = os.path.join(lstore_path, "requirements.txt")
     has_requirements = os.path.isfile(requirements_file)
 
-    if not wheel_files and not has_requirements:
-        print("Pure Python submission: using system python")
-        return sys.executable
+    if not all_found_wheels and not has_requirements:
+        return sys.executable, None
 
+    # Create virtualenv
     try:
-        print(f"  Creating virtualenv at: {venv_dir}")
         subprocess.run(
             [sys.executable, "-m", "venv", venv_dir],
             check=True,
@@ -51,20 +111,19 @@ def setup_submission_env(extract_path, lstore_path):
             timeout=60,
         )
     except subprocess.TimeoutExpired:
-        print("  Venv creation timed out; falling back to system python")
-        return sys.executable
+        return None, "Environment Error: Virtualenv creation timed out."
     except Exception as e:
-        print(f"  Venv creation failed: {e}; falling back to system python")
-        return sys.executable
+        return None, f"Environment Error: Virtualenv creation failed: {e}"
 
+    # Resolve platform-specific python path inside venv
     if os.name == "nt":
         venv_python = os.path.join(venv_dir, "Scripts", "python")
     else:
         venv_python = os.path.join(venv_dir, "bin", "python")
 
-    if wheel_files:
-        print(f"  Detected wheels: installing into venv ({len(wheel_files)} file(s))")
-        for whl in wheel_files:
+    # Install wheels
+    if valid_wheels:
+        for whl in valid_wheels:
             try:
                 subprocess.run(
                     [venv_python, "-m", "pip", "install", whl, "--quiet"],
@@ -74,12 +133,12 @@ def setup_submission_env(extract_path, lstore_path):
                     timeout=120,
                 )
             except subprocess.TimeoutExpired:
-                print(f"  pip install timed out for {whl} (continuing)")
+                return None, f"Install Error: pip install timed out for {os.path.basename(whl)}"
             except Exception as e:
-                print(f"  pip install failed for {whl}: {e} (continuing)")
+                return None, f"Install Error: pip install failed for {os.path.basename(whl)}: {e}"
 
+    # Install requirements
     if has_requirements:
-        print("  Detected requirements.txt: installing into venv")
         try:
             subprocess.run(
                 [
@@ -97,11 +156,11 @@ def setup_submission_env(extract_path, lstore_path):
                 timeout=120,
             )
         except subprocess.TimeoutExpired:
-            print("  pip install -r requirements.txt timed out (continuing)")
+            return None, "Install Error: pip install -r requirements.txt timed out"
         except Exception as e:
-            print(f"  pip install -r requirements.txt failed: {e} (continuing)")
+            return None, f"Install Error: pip install -r requirements.txt failed: {e}"
 
-    return venv_python
+    return venv_python, None
 
 
 # --------------- Test helpers ---------------
@@ -152,7 +211,9 @@ def test_submission(name, wheel_src, python_wrappers_src=None):
 
         # Run setup_submission_env
         print("\n  --- setup_submission_env ---")
-        python_exe = setup_submission_env(extract_path, lstore_path)
+        python_exe, errors = setup_submission_env(extract_path, lstore_path)
+
+            
         print(f"  Returned python: {python_exe}")
 
         # Test import
@@ -195,7 +256,7 @@ def test_pure_python():
             f.write("class Database:\n    pass\n")
 
         print("\n  --- setup_submission_env ---")
-        python_exe = setup_submission_env(extract_path, lstore_path)
+        python_exe, error = setup_submission_env(extract_path, lstore_path)
         print(f"  Returned python: {python_exe}")
 
         if python_exe == sys.executable:
