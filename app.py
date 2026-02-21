@@ -328,7 +328,7 @@ def merge_contributors(a, b):
     return [{"name": k, "commits": v} for k, v in merged_map.items()]
 
 
-def setup_submission_env(extract_path, lstore_path) -> None | str:
+def setup_submission_env(extract_path, lstore_path) -> str:
     """
     Detects whether the submission contains pre-built wheel files or a requirements.txt,
     and if so creates a per-submission virtualenv and installs the dependencies into it.
