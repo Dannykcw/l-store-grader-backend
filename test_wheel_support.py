@@ -61,7 +61,7 @@ def is_wheel_compatible(wheel_path: str):
     if curr_w_tag.platform != curr_sys_tag.platform:
         mismatches.append(f"Platform Mismatch: Wheel expects {curr_w_tag.platform}, System is {curr_sys_tag.platform}")
         
-    reason = " | ".joing(mismatches) if mismatches else "Unknown tag incompatibility"
+    reason = " | ".join(mismatches) if mismatches else "Unknown tag incompatibility"
     
     return False, reason
 
