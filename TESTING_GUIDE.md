@@ -111,7 +111,7 @@ COWABUNGA_WHEEL = os.path.join(
 )
 ```
 
-The test code should be able to handle any environment tahnks to regex. In case it didn't work for you, just change the `find_file` call or replace it with the exact string.
+The test code should be able to handle any environment thanks to regex. In case it didn't work for you, just change the `find_file` call or replace it with the exact string.
 
 These paths are near the bottom of `test_wheel_support.py`.
 
@@ -218,8 +218,8 @@ sudo apt install python3-venv
 ## Note
 
 - None of the test are in this repo.
-- A wheel built on your machine won't install on a server with a different OS/Python. If the wheel is incorrectly build fo rthe servers's platform, the error should be propergated back to you.
-- TODO: Testing `requirements.txt` submission. I couulnd't find a good one, so they're not covered by these fixtures. To test manually, add a `requirements.txt` (e.g., containing `sortedcontainers`) to a temp lstore folder and call `setup_submission_env()` directly.
+- A wheel built on your machine won't install on a server with a different OS/Python. If the wheel is incorrectly build for the servers's platform, the error should be propagated back to you.
+- TODO: Testing `requirements.txt` submission. I couldn't find a good one, so they're not covered by these fixtures. To test manually, add a `requirements.txt` (e.g., containing `sortedcontainers`) to a temp lstore folder and call `setup_submission_env()` directly.
 
 ---
 
